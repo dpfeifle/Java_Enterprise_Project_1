@@ -1,4 +1,7 @@
 package com.revature;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -7,78 +10,166 @@ import com.revature.Employee;
 import io.javalin.Javalin;
 import io.javalin.http.Context;
 import io.javalin.http.HttpStatus;
+import java.sql.Connection;
+import java.sql.DriverManager;
 
-public class Connection {
+public class Driver {
+	
+	public static Connection createConnection() {
+		Connection conn = null;
+		try {
+			conn = DriverManager.getConnection(
+					System.getenv("DB_URL_Project1"),
+					System.getenv("DB_username"),
+					System.getenv("DB_password"));
+		}
+		catch(SQLException e){
+			e.printStackTrace();
+		}
+		return conn;
+	}
+	
+	
 	public static void main(String[] args) {
 		
-		User[] currentUser = {null};
+		boolean[] madeEmployees = {false};
 		
 		ArrayList<User> employees = new ArrayList<>();
-		Employee e1 = new Employee(1, "fred", "dippitydoo".hashCode(), "Employee");
-		Employee e2 = new Employee(2, "Pamela", "helloworld".hashCode(), "Employee");
-		Employee e3 = new Employee(3, "Marco", "FatBunnyCheeseButter".hashCode(), "Employee");
-		Manager m1 = new Manager (4, "Manny Ger", "IAmBossMan".hashCode(), "Manager");
-		
-		employees.add(e1);
-		employees.add(e2);
-		employees.add(e3);
-		employees.add(m1);
-		
-		
-		
 		
 		Javalin app = Javalin.create().start();
 		
+		app.before(ctx ->{
+			Connection conn = null;
+			Statement stmt = null;
+			ResultSet set = null;
+			
+			try {
+				
+				if(!madeEmployees[0]){
+					
+				ctx.cookie("currentUser", "none,none");	
+				conn = createConnection();
+				stmt = conn.createStatement();
+				
+				set = stmt.executeQuery("SELECT * FROM EMPLOYEE");
+				
+				Employee nextEmployee = null;
+				
+				while(set.next()) {
+					nextEmployee = new Employee(
+							set.getInt(1),
+							set.getString(2),
+							set.getString(4)
+							);
+					employees.add(nextEmployee);
+				}
+				madeEmployees[0] = true;
+				
+				
+				}
+
+			}
+			catch(SQLException e) {
+				e.printStackTrace();
+			}
+		});
+		
 		app.post("/newUser", ctx ->{
-			boolean userExists = false;
+			
 			Login userInfo = ctx.bodyAsClass(Login.class);
 			
-			for(User e: employees) {
-				if(e.getUsername().equals(userInfo.getUsername())) {
-					userExists = true;
-					break;
+			Connection conn = null;
+			Statement stmt = null;
+			ResultSet set = null;
+			
+			try {
+				conn = createConnection();
+				stmt = conn.createStatement();
+				
+				set = stmt.executeQuery("SELECT USERNAME FROM Employee WHERE username = '" + userInfo.getUsername()+ "'");
+				
+				if(set.next()) {
+					ctx.status(HttpStatus.CONFLICT);
+					ctx.html("<h1>Username " + userInfo.getUsername() + " already exists</h1>");
 				}
+				
+				else {
+					stmt.execute("INSERT INTO EMPLOYEE (username, passhash) Values "
+							+ "('" + userInfo.getUsername() + "', '" + 
+							userInfo.getPassword().hashCode() + "')");
+					
+					ctx.status(HttpStatus.ACCEPTED);
+					ctx.html("<h1>New User " + userInfo.getUsername() + " successfully created!</h1>");
+					
+					
+					set = stmt.executeQuery("SELECT * FROM EMPLOYEE WHERE username = '" + userInfo.getUsername() + "'");
+					set.next();
+					Employee newEmployee = new Employee(
+							set.getInt(1),
+							set.getString(2),
+							set.getString(4)
+							);
+					employees.add(newEmployee);
+				}
+				
+			}
+			finally {
+				conn.close();
+				stmt.close();
+				
 			}
 			
-			if(!userExists) {
-				Employee newUser = new Employee((employees.size() + 1), userInfo.getUsername(), 
-						userInfo.getPassword().hashCode(), "Employee");
-				employees.add(newUser);
-				ctx.status(HttpStatus.ACCEPTED);
-				ctx.html("<h1>New User " + newUser.getUsername() + " successfully created!</h1>");
-			}
-			else {
-				ctx.status(HttpStatus.CONFLICT);
-				ctx.html("<h1>Username " + userInfo.getUsername() + " already exists</h1>");
-			}
 		});
 
 		
 		app.post("/login", ctx -> {
 			Login userInfo = ctx.bodyAsClass(Login.class);
 			
-			for(User e : employees) {
+			Connection conn = null;
+			Statement stmt = null;
+			ResultSet set = null;
+			
+			try {
+				conn = createConnection();
+				stmt = conn.createStatement();
 				
-				if (userInfo.getUsername().equals(e.getUsername()) && 
-						(userInfo.getPassword().hashCode() == e.getPasshash())){
+				set = stmt.executeQuery("SELECT username, passhash, permissionLevel FROM employee "
+						+ "WHERE username = '" + userInfo.getUsername() + "'");
+				
+				
+				if(set.next()) {
 					
-					currentUser[0] = e;
-					ctx.html("<h1>Welcome back " + currentUser[0].getUsername() + "!</h1>");
-					break;
+					Login matchingUser = new Login(set.getString(1), set.getString(2));
 					
+					if(Integer.parseInt(matchingUser.getPassword()) == userInfo.getPassword().hashCode()) {
+						ctx.cookie("currentUser", (set.getString(1) + "," + set.getString(3)));
+						ctx.html("<h1>Welcome back " + ctx.cookie("currentUser").split(",")[0] + "!</h1>");
+					}
+					else {
+						ctx.html("<h1>Invalid username/password combo</h1>");
+					}
 				}
 				else {
 					ctx.html("<h1>Invalid username/password combo</h1>");
 				}
+					
+				}
+			
+			
+			finally {
+				conn.close();
+				set.close();
+				stmt.close();
 			}
 			
 		});
 		
 		app.get("/users", ctx ->{
-			if(currentUser[0] != null) {
+			if(!(ctx.cookie("currentUser").split(",")[1].equals("none"))) {
 				ctx.json(employees);
 				ctx.status(HttpStatus.ACCEPTED);
 			}
+			
 			else {
 				ctx.status(HttpStatus.LOCKED);
 				ctx.html("<p>You need to be logged in to view this information</p>");
