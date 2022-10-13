@@ -25,6 +25,10 @@ public class User {
 		this.userPrivelege = userPrivelege;
 	}
 
+	public User(int userid2, String username2, String userPrivelege2) {
+		// TODO Auto-generated constructor stub
+	}
+
 	public int getUserid() {
 		return userid;
 	}
