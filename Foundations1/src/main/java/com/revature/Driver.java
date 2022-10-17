@@ -12,6 +12,7 @@ import io.javalin.http.Context;
 import io.javalin.http.HttpStatus;
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.PreparedStatement;
 
 public class Driver {
 	
@@ -143,7 +144,7 @@ public class Driver {
 					
 					if(Integer.parseInt(matchingUser.getPassword()) == userInfo.getPassword().hashCode()) {
 						ctx.cookie("currentUser", (set.getString(1) + "," + set.getString(3)));
-						ctx.html("<h1>Welcome back " + ctx.cookie("currentUser").split(",")[0] + "!</h1>");
+						ctx.html("<h1>Welcome back " + set.getString(1) + "!</h1>");
 					}
 					else {
 						ctx.html("<h1>Invalid username/password combo</h1>");
@@ -174,6 +175,62 @@ public class Driver {
 				ctx.status(HttpStatus.LOCKED);
 				ctx.html("<p>You need to be logged in to view this information</p>");
 			}
+		});
+		
+		app.post("/newTicket", ctx -> {
+			
+			if(!(ctx.cookie("currentUser").split(",")[0].equals("none"))) {
+					Connection conn = createConnection();
+					ResultSet set = null;
+					PreparedStatement sql = null;
+					
+				try {
+					
+					
+					Ticket newTicket = ctx.bodyAsClass(Ticket.class);
+
+					sql = conn.prepareStatement("INSERT INTO REQUEST (username, description, amount)"
+							+ "VALUES (?, ?, ?)");
+					
+					sql.setString(1, newTicket.getUsername());
+					sql.setString(2, newTicket.getDescription());
+					sql.setFloat(3, newTicket.getAmount());
+					
+					System.out.println(newTicket.toString()); 
+					
+					System.out.println(sql.executeUpdate());
+					
+					ctx.status(HttpStatus.CREATED);
+					ctx.html("<h1>Successfully submitted new ticket!</h1>");
+				}
+				
+				catch(SQLException e) {
+					e.printStackTrace();
+				}
+				
+				finally {
+					
+					try {
+						
+						conn.close();
+						if(sql != null) {
+							sql.close();
+							
+						}
+						if(set != null) {
+							set.close();
+						}
+					}
+					catch(SQLException e) {
+						e.printStackTrace();
+					}
+				}
+			}
+			else {
+				ctx.status(HttpStatus.LOCKED);
+				ctx.html("<h1>You must be logged in to access this service</h1>");
+			}
+			
 		});
 
 	
