@@ -73,7 +73,7 @@ public class Driver {
 					
 					stmt = conn.prepareStatement("INSERT INTO EMPLOYEE (username, passhash) Values (?,?)");
 					stmt.setString(1, userInfo.getUsername());
-					stmt.setString(2, userInfo.getPassword());
+					stmt.setInt(2, userInfo.getPassword().hashCode());
 					
 					stmt.execute();
 					
@@ -133,6 +133,10 @@ public class Driver {
 				stmt.close();
 			}
 			
+		});
+		
+		app.get("user/logout", ctx -> {
+			ctx.cookie("currentUser", "none,none");
 		});
 		
 		app.get("user/view/all", ctx ->{

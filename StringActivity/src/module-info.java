@@ -1,0 +1,9 @@
+/**
+ * 
+ */
+/**
+ * @author sntcr
+ *
+ */
+module StringActivity {
+}
